@@ -77,7 +77,7 @@ class JSONField(models.Field):
         return value
 
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
-        if lookup_type in ['contains', 'in', 'icontains']:
+        if lookup_type in ['contains', 'in', 'icontains', "inlist"]:
             value = self.get_prep_value(value)
             return [value]
 
@@ -214,7 +214,7 @@ class PostgresLookup(BuiltinLookup):
 
 class EarthNearLookup(BuiltinLookup):
     '''
-    Eeed plugin: cube and earthdistance, This class help build geo
+    Need plugin: cube and earthdistance, This class help build geo
     search sql by earthdistance func
     '''
 
@@ -239,6 +239,10 @@ class EarthNearLookup(BuiltinLookup):
 
 
 class CasePostgresLookup(BuiltinLookup):
+    '''
+    This class help fuzzy query for string type
+    '''
+
     def process_lhs(self, qn, connection, lhs=None):
         lhs = lhs or self.lhs
         lhs_value, params = qn.compile(lhs)
@@ -246,7 +250,18 @@ class CasePostgresLookup(BuiltinLookup):
         return case_lhs_value, params
 
     def get_rhs_op(self, connection, rhs):
-        return "{0} lower({1})".format(self.operator, rhs)
+        return "{0} array[{1}]".format(self.operator, rhs)
+
+
+class InListLookup(BuiltinLookup):
+    def process_lhs(self, qn, connection, lhs=None):
+        lhs = lhs or self.lhs
+        lhs_value, params = qn.compile(lhs)
+        inlist_lhs_value = "to_json(array(select jsonb_array_elements(data) ->> '{0}'))::jsonb".format(lhs_value)
+        return inlist_lhs_value, params
+
+    def get_rhs_op(self, connection, rhs):
+        return "{0} array{1}".format(self.operator, rhs)
 
 
 class Near(EarthNearLookup):
@@ -291,6 +306,13 @@ class In(PostgresLookup):
     operator = '<@'
 
 JSONField.register_lookup(In)
+
+
+class InList(InListLookup):
+    lookup_name = 'inlist'
+    operator = '?|'
+
+JSONField.register_lookup(InList)
 
 
 class HasAll(PostgresLookup):
