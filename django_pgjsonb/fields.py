@@ -74,10 +74,13 @@ class JSONField(models.Field):
             # is the farest long in earth
             if len(value) != 3:
                 value = [0, 0, 12756000]
+        if lookup_type == 'inlist':
+            if isinstance(value, six.string_types):
+                value = value.split(',')
         return value
 
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
-        if lookup_type in ['contains', 'in', 'icontains', "inlist"]:
+        if lookup_type in ['contains', 'in', 'icontains']:
             value = self.get_prep_value(value)
             return [value]
 
@@ -250,18 +253,18 @@ class CasePostgresLookup(BuiltinLookup):
         return case_lhs_value, params
 
     def get_rhs_op(self, connection, rhs):
-        return "{0} array[{1}]".format(self.operator, rhs)
+        return "{0} lower({1})".format(self.operator, rhs)
 
 
 class InListLookup(BuiltinLookup):
     def process_lhs(self, qn, connection, lhs=None):
         lhs = lhs or self.lhs
         lhs_value, params = qn.compile(lhs)
-        inlist_lhs_value = "to_json(array(select jsonb_array_elements(data) ->> '{0}'))::jsonb".format(lhs_value)
+        inlist_lhs_value = "to_json({0})::jsonb".format(lhs_value)
         return inlist_lhs_value, params
 
     def get_rhs_op(self, connection, rhs):
-        return "{0} array{1}".format(self.operator, rhs)
+        return "{0} {1}".format(self.operator, rhs)
 
 
 class Near(EarthNearLookup):
